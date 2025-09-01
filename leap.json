@@ -1,0 +1,24 @@
+{
+  "project": "canvasai",
+  "version": "1.0.0",
+  "services": [
+    "gateway",
+    "canvas", 
+    "project",
+    "asset",
+    "ai"
+  ],
+  "databases": [
+    "postgres",
+    "minio", 
+    "redis"
+  ],
+  "autoDevOps": true,
+  "githubSync": true,
+  "features": {
+    "realtime": true,
+    "auth": true,
+    "storage": true,
+    "ai": true
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Color Harmony",
+  "id": "color-harmony",
+  "version": "1.0.0",
+  "description": "AI-powered color palette generation using advanced color theory",
+  "author": "CanvasAI Team",
+  "license": "MIT",
+  "keywords": ["color", "palette", "ai", "design"],
+  "permissions": [
+    "canvas.read",
+    "canvas.write",
+    "ui.panels",
+    "ai.access"
+  ],
+  "main": "index.js",
+  "icon": "palette.svg",
+  "category": "AI Tools",
+  "dependencies": {
+    "chroma-js": "^2.4.2"
+  }
+}
