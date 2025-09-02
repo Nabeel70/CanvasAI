@@ -1,107 +1,330 @@
 version: '3.8'
 
 services:
-  # Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      - VITE_API_URL=http://localhost:4000
-      - VITE_WS_URL=ws://localhost:4000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
-
-  # Backend (Encore)
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "4000:4000"
-    environment:
-      - DATABASE_URL=postgres://canvasai:password@postgres:5432/canvasai
-      - REDIS_URL=redis://redis:6379
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - JWT_SECRET=your-secret-key
-    depends_on:
-      - postgres
-      - redis
-      - minio
-    volumes:
-      - ./backend:/app
-
-  # AI Services
-  ai:
-    build:
-      context: ./ai
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      - REDIS_URL=redis://redis:6379
-      - MODEL_CACHE_PATH=/app/models
-    volumes:
-      - ./ai:/app
-      - ai_models:/app/models
-    depends_on:
-      - redis
-
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
+    container_name: canvasai_postgres
+    environment:
+      POSTGRES_DB: canvasai
+      POSTGRES_USER: canvasai
+      POSTGRES_PASSWORD: canvasai_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
       - "5432:5432"
-    environment:
-      - POSTGRES_DB=canvasai
-      - POSTGRES_USER=canvasai
-      - POSTGRES_PASSWORD=password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./backend/migrations:/docker-entrypoint-initdb.d/migrations
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U canvasai -d canvasai"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   # Redis for caching and real-time features
   redis:
     image: redis:7-alpine
+    container_name: canvasai_redis
+    command: redis-server --appendonly yes --requirepass canvasai_redis_password
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "canvasai_redis_password", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
-  # MinIO for object storage
+  # MinIO for S3-compatible object storage
   minio:
     image: minio/minio:latest
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+    container_name: canvasai_minio
     command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_DEFAULT_BUCKETS: canvasai-assets,canvasai-exports,canvasai-uploads
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
     volumes:
       - minio_data:/data
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Nginx reverse proxy
-  nginx:
-    image: nginx:alpine
+  # MinIO Client for bucket setup
+  minio-setup:
+    image: minio/mc:latest
+    container_name: canvasai_minio_setup
+    depends_on:
+      - minio
+    networks:
+      - canvasai_network
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10;
+      mc alias set minio http://minio:9000 minioadmin minioadmin123;
+      mc mb minio/canvasai-assets --ignore-existing;
+      mc mb minio/canvasai-exports --ignore-existing;
+      mc mb minio/canvasai-uploads --ignore-existing;
+      mc policy set public minio/canvasai-assets;
+      mc policy set private minio/canvasai-exports;
+      mc policy set private minio/canvasai-uploads;
+      echo 'MinIO setup completed';
+      "
+
+  # CanvasAI Backend (Go/Encore)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: canvasai_backend
+    environment:
+      - DATABASE_URL=postgres://canvasai:canvasai_password@postgres:5432/canvasai?sslmode=disable
+      - REDIS_URL=redis://:canvasai_redis_password@redis:6379/0
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - MINIO_USE_SSL=false
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - API_PORT=4000
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # CanvasAI AI Services (Python/FastAPI)
+  ai-service:
+    build:
+      context: ./ai
+      dockerfile: Dockerfile
+    container_name: canvasai_ai
+    environment:
+      - REDIS_URL=redis://:canvasai_redis_password@redis:6379/1
+      - MODEL_CACHE_PATH=/app/models
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - CUDA_VISIBLE_DEVICES=0
+      - HF_HOME=/app/models/.cache
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    volumes:
+      - ./ai:/app
+      - ai_models:/app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # CanvasAI Frontend (React/Vite) - Development
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: canvasai_frontend
+    environment:
+      - VITE_API_URL=http://localhost:4000
+      - VITE_WS_URL=ws://localhost:4000
+      - VITE_AI_URL=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+      - ai-service
+    networks:
+      - canvasai_network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    restart: unless-stopped
+
+  # CanvasAI Frontend (React/Vite) - Production Build
+  frontend-prod:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: canvasai_frontend_prod
+    environment:
+      - VITE_API_URL=http://localhost:4000
+      - VITE_AI_URL=http://localhost:8000
     ports:
       - "80:80"
+    depends_on:
+      - backend
+      - ai-service
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    profiles:
+      - production
+
+  # Nginx Reverse Proxy (Production)
+  nginx:
+    image: nginx:alpine
+    container_name: canvasai_nginx
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
     depends_on:
-      - frontend
+      - frontend-prod
       - backend
-      - ai
+      - ai-service
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    profiles:
+      - production
+
+  # Development tools
+  adminer:
+    image: adminer:latest
+    container_name: canvasai_adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    profiles:
+      - development
+
+  # Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: canvasai_redis_commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379:1:canvasai_redis_password
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    profiles:
+      - development
+
+  # Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: canvasai_prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: canvasai_grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - canvasai_network
+    restart: unless-stopped
+    profiles:
+      - monitoring
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
   minio_data:
+    driver: local
   ai_models:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  canvasai_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Health check for the entire stack
+x-healthcheck-common: &healthcheck-common
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
