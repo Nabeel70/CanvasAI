@@ -1,6 +1,6 @@
 import React from 'react'
 import { 
-  CursorArrowRayIcon,
+  CursorArrowRaysIcon,
   PencilIcon,
   Square3Stack3DIcon,
   CircleStackIcon,
@@ -36,7 +36,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onExport, onImport }) => {
   } = useCanvasStore()
 
   const tools: Array<{ id: Tool; icon: React.ComponentType<any>; label: string; shortcut?: string }> = [
-    { id: 'select', icon: CursorArrowRayIcon, label: 'Select', shortcut: 'V' },
+    { id: 'select', icon: CursorArrowRaysIcon, label: 'Select', shortcut: 'V' },
     { id: 'pen', icon: PencilIcon, label: 'Pen', shortcut: 'P' },
     { id: 'rectangle', icon: Square3Stack3DIcon, label: 'Rectangle', shortcut: 'R' },
     { id: 'circle', icon: CircleStackIcon, label: 'Circle', shortcut: 'C' },
