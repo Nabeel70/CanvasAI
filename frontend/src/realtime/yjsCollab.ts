@@ -1,6 +1,7 @@
 import * as Y from 'yjs'
 import { WebrtcProvider } from 'y-webrtc'
 import { fabric } from 'fabric'
+import { useCanvasStore } from '@/stores/canvasStore'
 
 let ydoc: Y.Doc | null = null
 let provider: WebrtcProvider | null = null
