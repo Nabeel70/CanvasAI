@@ -249,7 +249,7 @@ func RefreshToken(ctx context.Context) (*AuthResponse, error) {
 	}
 
 	// Get fresh user data
-	user, err := getUserByID(claims.UserID)
+	user, err := getUserByID(ctx, claims.UserID)
 	if err != nil {
 		if err == ErrUserNotFound {
 			return nil, &errs.Error{Code: errs.NotFound, Message: "user not found"}
