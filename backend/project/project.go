@@ -52,7 +52,7 @@ type ListProjectsResponse struct {
 }
 
 var db = sqldb.NewDatabase("project", sqldb.DatabaseConfig{
-	Migrations: "./migrations",
+	Migrations: "../migrations",
 })
 
 //encore:api auth method=POST path=/projects
@@ -84,9 +84,9 @@ func CreateProject(ctx context.Context, req *CreateProjectRequest) (*Project, er
 
 	// Add owner as collaborator
 	_, err = db.Exec(ctx, `
-		INSERT INTO collaborators (project_id, user_id, role, added_at)
+		INSERT INTO project_collaborators (project_id, user_id, role, invited_by)
 		VALUES ($1, $2, $3, $4)
-	`, projectID, userID, "owner", now)
+	`, projectID, userID, "owner", userID)
 	if err != nil {
 		return nil, &errs.Error{
 			Code:    errs.Internal,
@@ -122,7 +122,7 @@ func ListProjects(ctx context.Context) (*ListProjectsResponse, error) {
 	rows, err := db.Query(ctx, `
 		SELECT p.id, p.title, p.slug, p.owner_id, p.description, p.thumbnail, p.is_public, p.created_at, p.updated_at
 		FROM projects p
-		JOIN collaborators c ON p.id = c.project_id
+		JOIN project_collaborators c ON p.id = c.project_id
 		WHERE c.user_id = $1
 		ORDER BY p.updated_at DESC
 	`, userID)
@@ -158,7 +158,7 @@ func GetProject(ctx context.Context, id string) (*Project, error) {
 	var hasAccess bool
 	err := db.QueryRow(ctx, `
 		SELECT EXISTS(
-			SELECT 1 FROM collaborators 
+			SELECT 1 FROM project_collaborators
 			WHERE project_id = $1 AND user_id = $2
 		)
 	`, id, userID).Scan(&hasAccess)
@@ -183,8 +183,8 @@ func GetProject(ctx context.Context, id string) (*Project, error) {
 
 	// Get collaborators
 	rows, err := db.Query(ctx, `
-		SELECT user_id, role, added_at
-		FROM collaborators WHERE project_id = $1
+		SELECT user_id, role, invited_at
+		FROM project_collaborators WHERE project_id = $1
 	`, id)
 	if err == nil {
 		defer rows.Close()
@@ -207,7 +207,7 @@ func UpdateProject(ctx context.Context, id string, req *UpdateProjectRequest) (*
 	// Check if user is owner or editor
 	var role string
 	err := db.QueryRow(ctx, `
-		SELECT role FROM collaborators 
+		SELECT role FROM project_collaborators
 		WHERE project_id = $1 AND user_id = $2
 	`, id, userID).Scan(&role)
 	if err != nil || (role != "owner" && role != "editor") {
