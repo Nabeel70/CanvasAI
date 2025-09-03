@@ -83,7 +83,8 @@ function createPluginAPI(registry: PluginRegistry): PluginAPI {
       const { canvas } = getStore()
       if (!canvas) return
       if (object.type === 'rect' || object.type === 'rectangle') {
-        const rect = new (window as any).fabric.Rect({
+        const { fabric } = await import('fabric')
+        const rect = new fabric.Rect({
           left: object.left ?? 100,
           top: object.top ?? 100,
           width: object.width ?? 100,
