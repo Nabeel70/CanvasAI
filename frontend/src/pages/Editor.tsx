@@ -9,6 +9,9 @@ import PropertiesPanel from '@/components/canvas/PropertiesPanel'
 import AIToolsPanel from '@/components/canvas/AIToolsPanel'
 import { useCanvasStore } from '@/stores/canvasStore'
 import { useAuthStore } from '@/stores/authStore'
+import { initYjsCollaboration, disposeYjsCollaboration } from '@/realtime/yjsCollab'
+import { PluginPanelsProvider, usePluginPanels, pluginManager } from '@/plugins/PluginManager'
+import ColorHarmonyPlugin from '@/plugins/colorHarmony'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
 const AI_BASE_URL = import.meta.env.VITE_AI_URL || 'http://localhost:8000'
@@ -17,10 +20,10 @@ const Editor: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>()
   const { user } = useAuthStore()
   const { canvas, setCollaborating } = useCanvasStore()
-  
+
   const [selectedObjects, setSelectedObjects] = useState<fabric.Object[]>([])
   const [leftPanelTab, setLeftPanelTab] = useState<'layers' | 'assets'>('layers')
-  const [rightPanelTab, setRightPanelTab] = useState<'properties' | 'ai'>('properties')
+  const [rightPanelTab, setRightPanelTab] = useState<'properties' | 'ai' | 'plugins'>('properties')
   const [projectName, setProjectName] = useState('Untitled Project')
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
@@ -32,6 +35,14 @@ const Editor: React.FC = () => {
     }
   }, [projectId])
 
+  // Initialize plugin system (register built-in plugins once)
+  useEffect(() => {
+    pluginManager.register(ColorHarmonyPlugin)
+    return () => {
+      pluginManager.unregister(ColorHarmonyPlugin.manifest.id)
+    }
+  }, [])
+
   // Auto-save functionality
   useEffect(() => {
     if (!canvas) return
@@ -42,6 +53,18 @@ const Editor: React.FC = () => {
 
     return () => clearInterval(autoSaveInterval)
   }, [canvas])
+
+  // Init real-time collaboration via Yjs when canvas and projectId available
+  useEffect(() => {
+    if (!canvas || !projectId) return
+    const cleanup = initYjsCollaboration({ canvas, room: `project-${projectId}` })
+    setCollaborating(true)
+    return () => {
+      cleanup?.()
+      disposeYjsCollaboration()
+      setCollaborating(false)
+    }
+  }, [canvas, projectId, setCollaborating])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -514,8 +537,18 @@ const Editor: React.FC = () => {
             >
               AI Tools
             </button>
+            <button
+              onClick={() => setRightPanelTab('plugins')}
+              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                rightPanelTab === 'plugins'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Plugins
+            </button>
           </div>
-          
+
           {/* Panel content */}
           <div className="flex-1 overflow-hidden">
             {rightPanelTab === 'properties' && <PropertiesPanel />}
@@ -527,9 +560,34 @@ const Editor: React.FC = () => {
                 onInpaintImage={handleInpaintImage}
               />
             )}
+            {rightPanelTab === 'plugins' && (
+              <PluginPanelsProvider>
+                <PluginPanels />
+              </PluginPanelsProvider>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Panels renderer for plugins
+const PluginPanels: React.FC = () => {
+  const panels = usePluginPanels()
+  return (
+    <div className="w-full h-full overflow-y-auto">
+      {panels.length === 0 ? (
+        <div className="p-4 text-sm text-gray-500">No plugins loaded.</div>
+      ) : (
+        <div className="divide-y divide-gray-200">
+          {panels.map((PanelComp) => (
+            <div key={(PanelComp as any).displayName || 'plugin-panel'} className="p-4">
+              <PanelComp />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
