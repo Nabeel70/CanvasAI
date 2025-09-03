@@ -174,7 +174,7 @@ func Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
 
 //encore:api auth method=GET path=/auth/me
 func GetProfile(ctx context.Context) (*User, error) {
-	userID := auth.UserID()
+	userID := encoreauth.UserID()
 	if userID == "" {
 		return nil, &errs.Error{Code: errs.Unauthenticated, Message: "not authenticated"}
 	}
@@ -193,7 +193,7 @@ func GetProfile(ctx context.Context) (*User, error) {
 
 //encore:api auth method=PUT path=/auth/profile
 func UpdateProfile(ctx context.Context, req *UpdateProfileRequest) (*User, error) {
-	userID := auth.UserID()
+	userID := encoreauth.UserID()
 	if userID == "" {
 		return nil, &errs.Error{Code: errs.Unauthenticated, Message: "not authenticated"}
 	}
