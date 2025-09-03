@@ -179,7 +179,7 @@ func GetProfile(ctx context.Context) (*User, error) {
 		return nil, &errs.Error{Code: errs.Unauthenticated, Message: "not authenticated"}
 	}
 
-	user, err := getUserByID(userID)
+	user, err := getUserByID(ctx, userID)
 	if err != nil {
 		if err == ErrUserNotFound {
 			return nil, &errs.Error{Code: errs.NotFound, Message: "user not found"}
@@ -198,7 +198,7 @@ func UpdateProfile(ctx context.Context, req *UpdateProfileRequest) (*User, error
 		return nil, &errs.Error{Code: errs.Unauthenticated, Message: "not authenticated"}
 	}
 
-	user, err := getUserByID(userID)
+	user, err := getUserByID(ctx, userID)
 	if err != nil {
 		if err == ErrUserNotFound {
 			return nil, &errs.Error{Code: errs.NotFound, Message: "user not found"}
