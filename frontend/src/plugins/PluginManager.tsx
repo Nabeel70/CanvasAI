@@ -124,7 +124,7 @@ function createPluginAPI(registry: PluginRegistry): PluginAPI {
     setActiveTool: (tool) => useCanvasStore.getState().setActiveTool(tool),
     getActiveTool: () => useCanvasStore.getState().activeTool,
     addPanel: (id: string, _title: string, component: React.ComponentType) => {
-      const Comp: React.FC = () => component({})
+      const Comp = component
       ;(Comp as any).displayName = id
       registry.addPanel(Comp)
     },
