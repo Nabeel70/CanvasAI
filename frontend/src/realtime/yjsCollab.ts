@@ -20,6 +20,40 @@ export const initYjsCollaboration = ({ canvas, room }: InitParams) => {
   provider = new WebrtcProvider(room, ydoc)
   yCanvasMap = ydoc.getMap('canvas')
 
+  // Presence using awareness
+  const awareness = provider.awareness
+  const store = useCanvasStore.getState()
+  // Set initial local state
+  awareness.setLocalStateField('user', {
+    id: store.collaborators[0]?.id || 'me',
+    name: store.collaborators[0]?.name || 'You',
+    color: '#3B82F6',
+  })
+
+  const updatePresenceFromAwareness = () => {
+    const states = Array.from(awareness.getStates().values()) as any[]
+    // Map to collaborators in store
+    states.forEach((s: any, idx: number) => {
+      if (!s) return
+      const id = s.user?.id || `peer-${idx}`
+      store.updateCollaborator({
+        id,
+        name: s.user?.name || id,
+        cursor: s.cursor || undefined,
+        selection: s.selection || undefined,
+      })
+    })
+  }
+
+  awareness.on('change', updatePresenceFromAwareness)
+
+  // Update local cursor on mouse move
+  const onMouseMove = (opt: fabric.IEvent) => {
+    const pointer = canvas.getPointer(opt.e)
+    awareness.setLocalStateField('cursor', { x: pointer.x, y: pointer.y })
+  }
+  canvas.on('mouse:move', onMouseMove)
+
   // Apply remote updates to Fabric
   const applyRemote = () => {
     if (!yCanvasMap || !canvas) return
