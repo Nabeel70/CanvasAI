@@ -77,20 +77,7 @@ var secrets struct {
 
 var _ = config.Load(context.Background(), &secrets)
 
-// Database connection (would be injected in a real app)
-var db *sql.DB
-
-func init() {
-	// Initialize database connection
-	// This would be properly injected in a real application
-	initDB()
-}
-
-func initDB() {
-	// Database initialization would go here
-	// For now, we'll use a placeholder
-	log.Println("Auth service initialized")
-}
+var authdb = sqldb.NewDatabase("auth", sqldb.DatabaseConfig{ Migrations: "../migrations" })
 
 //encore:api public method=POST path=/auth/signup
 func Signup(ctx context.Context, req *SignupRequest) (*AuthResponse, error) {
