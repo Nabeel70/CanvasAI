@@ -87,7 +87,7 @@ func Signup(ctx context.Context, req *SignupRequest) (*AuthResponse, error) {
 	}
 
 	// Check if user already exists
-	existingUser, err := getUserByEmail(req.Email)
+	existingUser, err := getUserByEmail(ctx, req.Email)
 	if err != nil && err != ErrUserNotFound {
 		rlog.Error("failed to check existing user", "error", err)
 		return nil, &errs.Error{Code: errs.Internal, Message: "internal server error"}
@@ -112,7 +112,7 @@ func Signup(ctx context.Context, req *SignupRequest) (*AuthResponse, error) {
 		UpdatedAt: time.Now(),
 	}
 
-	if err := createUser(user, string(hashedPassword)); err != nil {
+	if err := createUser(ctx, user, string(hashedPassword)); err != nil {
 		rlog.Error("failed to create user", "error", err)
 		return nil, &errs.Error{Code: errs.Internal, Message: "internal server error"}
 	}
@@ -138,7 +138,7 @@ func Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
 	}
 
 	// Get user by email
-	user, err := getUserByEmail(req.Email)
+	user, err := getUserByEmail(ctx, req.Email)
 	if err != nil {
 		if err == ErrUserNotFound {
 			return nil, &errs.Error{Code: errs.Unauthenticated, Message: "invalid credentials"}
@@ -148,7 +148,7 @@ func Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
 	}
 
 	// Get user password hash
-	hashedPassword, err := getUserPasswordHash(user.ID)
+	hashedPassword, err := getUserPasswordHash(ctx, user.ID)
 	if err != nil {
 		rlog.Error("failed to get user password", "error", err)
 		return nil, &errs.Error{Code: errs.Internal, Message: "internal server error"}
@@ -328,52 +328,53 @@ func generateJWTToken(user *User) (string, error) {
 	return token.SignedString([]byte(secrets.JWTSecret))
 }
 
-// Database operations (mock implementations)
-// In a real application, these would interact with an actual database
-
-var users = make(map[string]*User)
-var userPasswords = make(map[string]string)
-var usersByEmail = make(map[string]*User)
-
-func createUser(user *User, hashedPassword string) error {
-	users[user.ID] = user
-	userPasswords[user.ID] = hashedPassword
-	usersByEmail[user.Email] = user
-	return nil
+// Database operations using Postgres via Encore sqldb
+func createUser(ctx context.Context, user *User, hashedPassword string) error {
+	_, err := authdb.Exec(ctx, `INSERT INTO users (id,email,name,password_hash,avatar,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, user.ID, user.Email, user.Name, hashedPassword, user.Avatar, user.CreatedAt, user.UpdatedAt)
+	return err
 }
 
-func getUserByEmail(email string) (*User, error) {
-	user, exists := usersByEmail[strings.ToLower(email)]
-	if !exists {
-		return nil, ErrUserNotFound
+func getUserByEmail(ctx context.Context, email string) (*User, error) {
+	row := authdb.QueryRow(ctx, `SELECT id, email, name, avatar, created_at, updated_at FROM users WHERE lower(email)=lower($1)`, strings.ToLower(email))
+	var u User
+	var avatar sql.NullString
+	if err := row.Scan(&u.ID, &u.Email, &u.Name, &avatar, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows { return nil, ErrUserNotFound }
+		return nil, err
 	}
-	return user, nil
+	if avatar.Valid { u.Avatar = &avatar.String }
+	return &u, nil
 }
 
-func getUserByID(id string) (*User, error) {
-	user, exists := users[id]
-	if !exists {
-		return nil, ErrUserNotFound
+func getUserByID(ctx context.Context, id string) (*User, error) {
+	row := authdb.QueryRow(ctx, `SELECT id, email, name, avatar, created_at, updated_at FROM users WHERE id=$1`, id)
+	var u User
+	var avatar sql.NullString
+	if err := row.Scan(&u.ID, &u.Email, &u.Name, &avatar, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows { return nil, ErrUserNotFound }
+		return nil, err
 	}
-	return user, nil
+	if avatar.Valid { u.Avatar = &avatar.String }
+	return &u, nil
 }
 
-func getUserPasswordHash(userID string) (string, error) {
-	hash, exists := userPasswords[userID]
-	if !exists {
-		return "", ErrUserNotFound
+func getUserPasswordHash(ctx context.Context, userID string) (string, error) {
+	row := authdb.QueryRow(ctx, `SELECT password_hash FROM users WHERE id=$1`, userID)
+	var hash string
+	if err := row.Scan(&hash); err != nil {
+		if err == sql.ErrNoRows { return "", ErrUserNotFound }
+		return "", err
 	}
 	return hash, nil
 }
 
 func updateUser(user *User) error {
-	users[user.ID] = user
-	usersByEmail[user.Email] = user
-	return nil
+	_, err := authdb.Exec(context.Background(), `UPDATE users SET name=$1, avatar=$2, updated_at=$3 WHERE id=$4`, user.Name, user.Avatar, time.Now(), user.ID)
+	return err
 }
 
 // Auth handler for Encore
-func AuthHandler(ctx context.Context, token string) (auth.UID, *auth.UserData, error) {
+func AuthHandler(ctx context.Context, token string) (encoreauth.UID, *encoreauth.UserData, error) {
 	// Parse JWT token
 	parsedToken, err := jwt.ParseWithClaims(token, &UserClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secrets.JWTSecret), nil
@@ -388,7 +389,7 @@ func AuthHandler(ctx context.Context, token string) (auth.UID, *auth.UserData, e
 		return "", nil, errors.New("invalid token claims")
 	}
 
-	return auth.UID(claims.UserID), &auth.UserData{
+	return encoreauth.UID(claims.UserID), &encoreauth.UserData{
 		ID:    claims.UserID,
 		Email: claims.Email,
 	}, nil
