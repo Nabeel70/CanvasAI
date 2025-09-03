@@ -18,6 +18,9 @@ type Project struct {
 	OwnerID       string         `json:"ownerId"`
 	Description   string         `json:"description,omitempty"`
 	Thumbnail     string         `json:"thumbnail,omitempty"`
+	CanvasData    any            `json:"canvasData,omitempty"`
+	CanvasWidth   int            `json:"canvasWidth"`
+	CanvasHeight  int            `json:"canvasHeight"`
 	IsPublic      bool           `json:"isPublic"`
 	CreatedAt     time.Time      `json:"createdAt"`
 	UpdatedAt     time.Time      `json:"updatedAt"`
@@ -40,9 +43,12 @@ type CreateProjectRequest struct {
 
 // UpdateProjectRequest represents the update project request
 type UpdateProjectRequest struct {
-	Title       string `json:"title,omitempty"`
-	Description string `json:"description,omitempty"`
-	IsPublic    bool   `json:"isPublic,omitempty"`
+	Title        string      `json:"title,omitempty"`
+	Description  string      `json:"description,omitempty"`
+	IsPublic     *bool       `json:"isPublic,omitempty"`
+	CanvasData   interface{} `json:"canvasData,omitempty"`
+	CanvasWidth  *int        `json:"canvasWidth,omitempty"`
+	CanvasHeight *int        `json:"canvasHeight,omitempty"`
 }
 
 // ListProjectsResponse represents the list projects response
@@ -95,14 +101,16 @@ func CreateProject(ctx context.Context, req *CreateProjectRequest) (*Project, er
 	}
 
 	project := &Project{
-		ID:          projectID,
-		Title:       req.Title,
-		Slug:        slug,
-		OwnerID:     userID,
-		Description: req.Description,
-		IsPublic:    false,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:           projectID,
+		Title:        req.Title,
+		Slug:         slug,
+		OwnerID:      userID,
+		Description:  req.Description,
+		CanvasWidth:  800,
+		CanvasHeight: 600,
+		IsPublic:     false,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 		Collaborators: []Collaborator{
 			{
 				UserID:  userID,
@@ -171,9 +179,9 @@ func GetProject(ctx context.Context, id string) (*Project, error) {
 
 	var project Project
 	err = db.QueryRow(ctx, `
-		SELECT id, title, slug, owner_id, description, thumbnail, is_public, created_at, updated_at
+		SELECT id, title, slug, owner_id, description, thumbnail, canvas_data, canvas_width, canvas_height, is_public, created_at, updated_at
 		FROM projects WHERE id = $1
-	`, id).Scan(&project.ID, &project.Title, &project.Slug, &project.OwnerID, &project.Description, &project.Thumbnail, &project.IsPublic, &project.CreatedAt, &project.UpdatedAt)
+	`, id).Scan(&project.ID, &project.Title, &project.Slug, &project.OwnerID, &project.Description, &project.Thumbnail, &project.CanvasData, &project.CanvasWidth, &project.CanvasHeight, &project.IsPublic, &project.CreatedAt, &project.UpdatedAt)
 	if err != nil {
 		return nil, &errs.Error{
 			Code:    errs.NotFound,
@@ -219,13 +227,16 @@ func UpdateProject(ctx context.Context, id string, req *UpdateProjectRequest) (*
 
 	// Update project
 	_, err = db.Exec(ctx, `
-		UPDATE projects 
+		UPDATE projects
 		SET title = COALESCE(NULLIF($2, ''), title),
 			description = COALESCE(NULLIF($3, ''), description),
 			is_public = COALESCE($4, is_public),
-			updated_at = $5
+			canvas_data = COALESCE($5, canvas_data),
+			canvas_width = COALESCE($6, canvas_width),
+			canvas_height = COALESCE($7, canvas_height),
+			updated_at = $8
 		WHERE id = $1
-	`, id, req.Title, req.Description, req.IsPublic, time.Now())
+	`, id, req.Title, req.Description, req.IsPublic, req.CanvasData, req.CanvasWidth, req.CanvasHeight, time.Now())
 	if err != nil {
 		return nil, &errs.Error{
 			Code:    errs.Internal,
