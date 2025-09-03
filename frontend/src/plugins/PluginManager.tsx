@@ -2,6 +2,7 @@ import React, { createContext, useContext, useMemo, useRef, useSyncExternalStore
 import { toast } from 'react-hot-toast'
 import { useCanvasStore } from '@/stores/canvasStore'
 import { Plugin, PluginAPI, PluginManifest } from '@/types/canvas'
+import { fabric } from 'fabric'
 
 // Simple plugin registry
 class PluginRegistry {
@@ -83,7 +84,6 @@ function createPluginAPI(registry: PluginRegistry): PluginAPI {
       const { canvas } = getStore()
       if (!canvas) return
       if (object.type === 'rect' || object.type === 'rectangle') {
-        const { fabric } = await import('fabric')
         const rect = new fabric.Rect({
           left: object.left ?? 100,
           top: object.top ?? 100,
