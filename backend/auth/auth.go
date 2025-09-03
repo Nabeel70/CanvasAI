@@ -19,6 +19,7 @@ import (
 	encoreauth "encore.dev/beta/auth"
 	"encore.dev/beta/errs"
 	"encore.dev/rlog"
+	"encore.dev/storage/sqldb"
 )
 
 // User represents a user in the system
