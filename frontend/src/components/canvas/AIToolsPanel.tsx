@@ -195,7 +195,7 @@ export const AIToolsPanel: React.FC<AIToolsPanelProps> = ({
         {/* Color Palette */}
         <div className="space-y-3">
           <h4 className="font-medium text-gray-800 flex items-center">
-            <ColorSwatchIcon className="w-4 h-4 mr-2" />
+            <SwatchIcon className="w-4 h-4 mr-2" />
             Color Harmony
           </h4>
           <p className="text-sm text-gray-600">
@@ -213,7 +213,7 @@ export const AIToolsPanel: React.FC<AIToolsPanelProps> = ({
               </>
             ) : (
               <>
-                <ColorSwatchIcon className="w-4 h-4 mr-2" />
+                <SwatchIcon className="w-4 h-4 mr-2" />
                 Generate Palette
               </>
             )}
