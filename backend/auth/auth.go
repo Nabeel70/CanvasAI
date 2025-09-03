@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"encore.dev/config"
-	"encore.dev/beta/auth"
+	encoreauth "encore.dev/beta/auth"
 	"encore.dev/beta/errs"
 	"encore.dev/rlog"
 )
