@@ -4,13 +4,16 @@ import { PlusIcon, FolderIcon, UserGroupIcon } from '@heroicons/react/24/outline
 import { useQuery } from 'react-query'
 import { Project } from '@/types'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
 const Dashboard: React.FC = () => {
-  const { data: projects, isLoading } = useQuery<Project[]>('projects', 
+  const { data: projects, isLoading } = useQuery<Project[]>(
+    'projects',
     async () => {
-      const response = await fetch('/api/projects', {
+      const response = await fetch(`${API_BASE_URL}/projects`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
       })
       if (!response.ok) throw new Error('Failed to fetch projects')
       const result = await response.json()
