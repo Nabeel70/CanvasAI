@@ -308,13 +308,24 @@ export const CanvasEditor: React.FC<CanvasEditorProps> = ({
         style={{ backgroundColor: '#ffffff' }}
       />
       
-      {/* Canvas overlay for tool feedback */}
+      {/* Canvas overlay for tool feedback and collaborator cursors */}
       <div className="absolute inset-0 pointer-events-none">
         {activeTool !== 'select' && (
           <div className="absolute top-2 left-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
             {activeTool} tool active
           </div>
         )}
+        {/* collaborator cursors */}
+        {useCanvasStore.getState().collaborators.map((c) => (
+          c.cursor ? (
+            <div key={c.id} className="absolute" style={{ left: c.cursor.x, top: c.cursor.y }}>
+              <div className="flex items-center -ml-2 -mt-6">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3B82F6', boxShadow: '0 0 0 2px white' }} />
+                <div className="ml-1 px-2 py-0.5 rounded text-[10px] text-white" style={{ backgroundColor: '#1E40AF' }}>{c.name || 'Peer'}</div>
+              </div>
+            </div>
+          ) : null
+        ))}
       </div>
     </div>
   )
