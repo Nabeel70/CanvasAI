@@ -10,6 +10,9 @@ import AIToolsPanel from '@/components/canvas/AIToolsPanel'
 import { useCanvasStore } from '@/stores/canvasStore'
 import { useAuthStore } from '@/stores/authStore'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+const AI_BASE_URL = import.meta.env.VITE_AI_URL || 'http://localhost:8000'
+
 const Editor: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>()
   const { user } = useAuthStore()
@@ -97,7 +100,7 @@ const Editor: React.FC = () => {
 
   const loadProject = async (id: string) => {
     try {
-      const response = await fetch(`/api/projects/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/projects/${id}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -127,7 +130,7 @@ const Editor: React.FC = () => {
     try {
       const canvasData = canvas.toJSON()
       
-      const response = await fetch(`/api/projects/${projectId}`, {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -223,7 +226,7 @@ const Editor: React.FC = () => {
   // AI tool handlers
   const handleGenerateLayout = async (prompt: string) => {
     try {
-      const response = await fetch('/ai/layout', {
+      const response = await fetch(`${AI_BASE_URL}/ai/layout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, width: 800, height: 600 })
@@ -273,7 +276,7 @@ const Editor: React.FC = () => {
 
   const handleGeneratePalette = async (imageData?: string) => {
     try {
-      const response = await fetch('/ai/palette', {
+      const response = await fetch(`${AI_BASE_URL}/ai/palette`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_data: imageData, count: 5 })
@@ -296,7 +299,7 @@ const Editor: React.FC = () => {
 
   const handleTraceImage = async (imageData: string) => {
     try {
-      const response = await fetch('/ai/trace', {
+      const response = await fetch(`${AI_BASE_URL}/ai/trace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_data: imageData })
@@ -328,7 +331,7 @@ const Editor: React.FC = () => {
 
   const handleInpaintImage = async (imageData: string, maskData: string, prompt: string) => {
     try {
-      const response = await fetch('/ai/inpaint', {
+      const response = await fetch(`${AI_BASE_URL}/ai/inpaint`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_data: imageData, mask_data: maskData, prompt })
