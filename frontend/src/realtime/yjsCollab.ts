@@ -113,7 +113,9 @@ export const initYjsCollaboration = ({ canvas, room }: InitParams) => {
     canvas.off('object:modified', onObjectChange)
     canvas.off('object:removed', onObjectChange)
     canvas.off('path:created', onObjectChange)
+    canvas.off('mouse:move', onMouseMove)
     yCanvasMap && yCanvasMap.unobserve(mapObserver)
+    awareness.off('change', updatePresenceFromAwareness)
   }
 
   return cleanup
