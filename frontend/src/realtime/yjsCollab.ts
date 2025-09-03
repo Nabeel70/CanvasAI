@@ -17,7 +17,26 @@ export const initYjsCollaboration = ({ canvas, room }: InitParams) => {
   if (ydoc) return cleanup
 
   ydoc = new Y.Doc()
-  provider = new WebrtcProvider(room, ydoc)
+  const defaultIce = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478?transport=udp' },
+  ]
+  const iceServers = (() => {
+    try {
+      const raw = (import.meta as any).env.VITE_ICE_SERVERS
+      if (!raw) return defaultIce
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : defaultIce
+    } catch {
+      return defaultIce
+    }
+  })()
+  const signaling = (() => {
+    const raw = (import.meta as any).env.VITE_YJS_SIGNALING as string | undefined
+    if (!raw) return ['wss://signaling.yjs.dev']
+    return raw.split(',').map((s) => s.trim()).filter(Boolean)
+  })()
+  provider = new WebrtcProvider(room, ydoc, { signaling, iceServers })
   yCanvasMap = ydoc.getMap('canvas')
 
   // Presence using awareness
