@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
-import { 
-  SparklesIcon, 
-  PhotoIcon, 
-  ColorSwatchIcon, 
+import {
+  SparklesIcon,
+  PhotoIcon,
+  SwatchIcon,
   PaintBrushIcon,
   MagnifyingGlassIcon,
   ArrowPathIcon
